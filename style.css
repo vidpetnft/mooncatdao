@@ -66,6 +66,12 @@ a:hover {
     color: hotpink;
 }
 
+.members {
+    display: grid;
+    grid-template-columns: auto auto;
+    padding: 10px;
+}
+
 .member {
     display: grid;
     grid-template-columns: 60px auto;
