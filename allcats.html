@@ -19,12 +19,12 @@
         height: 100%;
         overflow: auto;
         background: #000;
+
+        overscroll-behavior: none;
       }
 
       #stage {
         position: relative;
-        width: 50000px;
-        height: 50000px;
         background: #000;
       }
 
@@ -61,31 +61,39 @@
       const MIN_SCALE = 0.05;
       const MAX_SCALE = 200;
 
-      const START_X = 1000;
-      const START_Y = 1000;
+      const PAD = 200;
 
-      img.onload = () => {
-        img.style.left = START_X + "px";
-        img.style.top = START_Y + "px";
-        applyTransform();
-        viewport.scrollLeft = START_X - 50;
-        viewport.scrollTop = START_Y - 50;
-      };
-
-      function applyTransform() {
-        img.style.transform = `scale(${scale})`;
-      }
+      let imgW = 0;
+      let imgH = 0;
 
       function clamp(v, min, max) {
         return Math.min(Math.max(v, min), max);
       }
 
-      viewport.addEventListener("wheel", (e) => {
-        e.preventDefault();
+      function applyTransform() {
+        img.style.transform = `scale(${scale})`;
+      }
 
+      function updateStageSizeAndPosition() {
+        img.style.left = PAD + "px";
+        img.style.top = PAD + "px";
+
+        const stageW = Math.ceil(imgW * scale + PAD * 2);
+        const stageH = Math.ceil(imgH * scale + PAD * 2);
+
+        stage.style.width = stageW + "px";
+        stage.style.height = stageH + "px";
+      }
+
+      function centerInitialView() {
+        viewport.scrollLeft = Math.max(0, PAD - 50);
+        viewport.scrollTop = Math.max(0, PAD - 50);
+      }
+
+      function zoomAt(clientX, clientY, zoomFactor) {
         const rect = viewport.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
+        const mouseX = clientX - rect.left;
+        const mouseY = clientY - rect.top;
 
         const scrollLeft = viewport.scrollLeft;
         const scrollTop = viewport.scrollTop;
@@ -93,26 +101,49 @@
         const stageX = scrollLeft + mouseX;
         const stageY = scrollTop + mouseY;
 
-        const imgLeft = parseFloat(img.style.left || "0");
-        const imgTop = parseFloat(img.style.top || "0");
+        const imgLeft = PAD;
+        const imgTop = PAD;
 
         const relX = (stageX - imgLeft) / scale;
         const relY = (stageY - imgTop) / scale;
 
-        const zoomIn = e.deltaY < 0;
-        const factor = zoomIn ? 1.12 : 1 / 1.12;
-
-        const newScale = clamp(scale * factor, MIN_SCALE, MAX_SCALE);
+        const newScale = clamp(scale * zoomFactor, MIN_SCALE, MAX_SCALE);
         if (newScale === scale) return;
 
         scale = newScale;
+
         applyTransform();
+        updateStageSizeAndPosition();
 
         const newStageX = imgLeft + relX * scale;
         const newStageY = imgTop + relY * scale;
 
         viewport.scrollLeft = newStageX - mouseX;
         viewport.scrollTop = newStageY - mouseY;
+      }
+
+      img.onload = () => {
+        imgW = img.naturalWidth;
+        imgH = img.naturalHeight;
+
+        applyTransform();
+        updateStageSizeAndPosition();
+        centerInitialView();
+      };
+
+      viewport.addEventListener("wheel", (e) => {
+        const wantsZoom = e.ctrlKey || e.metaKey;
+
+        if (!wantsZoom) {
+          return;
+        }
+
+        e.preventDefault();
+
+        const zoomIn = e.deltaY < 0;
+        const factor = zoomIn ? 1.12 : 1 / 1.12;
+
+        zoomAt(e.clientX, e.clientY, factor);
       }, { passive: false });
     </script>
   </body>
