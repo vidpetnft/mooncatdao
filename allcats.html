@@ -19,7 +19,6 @@
         height: 100%;
         overflow: auto;
         background: #000;
-
         overscroll-behavior: none;
       }
 
@@ -58,7 +57,8 @@
 
       let scale = 1;
 
-      const MIN_SCALE = 0.05;
+      const MIN_SCALE = 0.25;
+
       const MAX_SCALE = 200;
 
       const PAD = 200;
@@ -78,11 +78,14 @@
         img.style.left = PAD + "px";
         img.style.top = PAD + "px";
 
-        const stageW = Math.ceil(imgW * scale + PAD * 2);
-        const stageH = Math.ceil(imgH * scale + PAD * 2);
+        const contentW = Math.ceil(imgW * scale + PAD * 2);
+        const contentH = Math.ceil(imgH * scale + PAD * 2);
 
-        stage.style.width = stageW + "px";
-        stage.style.height = stageH + "px";
+        const minW = viewport.clientWidth;
+        const minH = viewport.clientHeight;
+
+        stage.style.width = Math.max(contentW, minW) + "px";
+        stage.style.height = Math.max(contentH, minH) + "px";
       }
 
       function centerInitialView() {
@@ -122,21 +125,26 @@
         viewport.scrollTop = newStageY - mouseY;
       }
 
+      function handleResize() {
+        updateStageSizeAndPosition();
+      }
+
       img.onload = () => {
         imgW = img.naturalWidth;
         imgH = img.naturalHeight;
+
+        scale = clamp(scale, MIN_SCALE, MAX_SCALE);
 
         applyTransform();
         updateStageSizeAndPosition();
         centerInitialView();
       };
 
+      window.addEventListener("resize", handleResize);
+
       viewport.addEventListener("wheel", (e) => {
         const wantsZoom = e.ctrlKey || e.metaKey;
-
-        if (!wantsZoom) {
-          return;
-        }
+        if (!wantsZoom) return;
 
         e.preventDefault();
 
