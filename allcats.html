@@ -32,11 +32,9 @@
         left: 0;
         top: 0;
         transform-origin: 0 0;
-
         image-rendering: pixelated;
         image-rendering: crisp-edges;
         -ms-interpolation-mode: nearest-neighbor;
-
         user-select: none;
         -webkit-user-drag: none;
         cursor: default;
@@ -56,11 +54,8 @@
       const img = document.getElementById("img");
 
       let scale = 1;
-
       const MIN_SCALE = 0.25;
-
       const MAX_SCALE = 200;
-
       const PAD = 200;
 
       let imgW = 0;
@@ -81,11 +76,8 @@
         const contentW = Math.ceil(imgW * scale + PAD * 2);
         const contentH = Math.ceil(imgH * scale + PAD * 2);
 
-        const minW = viewport.clientWidth;
-        const minH = viewport.clientHeight;
-
-        stage.style.width = Math.max(contentW, minW) + "px";
-        stage.style.height = Math.max(contentH, minH) + "px";
+        stage.style.width = Math.max(contentW, viewport.clientWidth) + "px";
+        stage.style.height = Math.max(contentH, viewport.clientHeight) + "px";
       }
 
       function centerInitialView() {
@@ -98,11 +90,8 @@
         const mouseX = clientX - rect.left;
         const mouseY = clientY - rect.top;
 
-        const scrollLeft = viewport.scrollLeft;
-        const scrollTop = viewport.scrollTop;
-
-        const stageX = scrollLeft + mouseX;
-        const stageY = scrollTop + mouseY;
+        const stageX = viewport.scrollLeft + mouseX;
+        const stageY = viewport.scrollTop + mouseY;
 
         const imgLeft = PAD;
         const imgTop = PAD;
@@ -114,7 +103,6 @@
         if (newScale === scale) return;
 
         scale = newScale;
-
         applyTransform();
         updateStageSizeAndPosition();
 
@@ -125,32 +113,22 @@
         viewport.scrollTop = newStageY - mouseY;
       }
 
-      function handleResize() {
-        updateStageSizeAndPosition();
-      }
-
       img.onload = () => {
         imgW = img.naturalWidth;
         imgH = img.naturalHeight;
-
         scale = clamp(scale, MIN_SCALE, MAX_SCALE);
-
         applyTransform();
         updateStageSizeAndPosition();
         centerInitialView();
       };
 
-      window.addEventListener("resize", handleResize);
+      window.addEventListener("resize", updateStageSizeAndPosition);
 
       viewport.addEventListener("wheel", (e) => {
         const wantsZoom = e.ctrlKey || e.metaKey;
         if (!wantsZoom) return;
-
         e.preventDefault();
-
-        const zoomIn = e.deltaY < 0;
-        const factor = zoomIn ? 1.12 : 1 / 1.12;
-
+        const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
         zoomAt(e.clientX, e.clientY, factor);
       }, { passive: false });
     </script>
