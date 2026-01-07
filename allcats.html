@@ -14,44 +14,105 @@
         overflow: hidden;
       }
 
-      .viewport {
+      #viewport {
         width: 100%;
         height: 100%;
         overflow: auto;
         background: #000;
       }
 
-      img {
-        display: block;
-        transform-origin: top left;
+      #stage {
+        position: relative;
+        width: 50000px;
+        height: 50000px;
+        background: #000;
+      }
+
+      #img {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform-origin: 0 0;
+
         image-rendering: pixelated;
         image-rendering: crisp-edges;
         -ms-interpolation-mode: nearest-neighbor;
-        cursor: zoom-in;
+
+        user-select: none;
+        -webkit-user-drag: none;
+        cursor: default;
       }
     </style>
   </head>
   <body>
-    <div class="viewport" id="viewport">
-      <img id="img" src="img/allcats.png" alt="ALLCATS">
+    <div id="viewport">
+      <div id="stage">
+        <img id="img" src="img/allcats.png" alt="ALLCATS" />
+      </div>
     </div>
 
     <script>
-      const img = document.getElementById("img");
       const viewport = document.getElementById("viewport");
+      const stage = document.getElementById("stage");
+      const img = document.getElementById("img");
 
       let scale = 1;
-      const MIN_SCALE = 0.1;
-      const MAX_SCALE = 50;
+
+      const MIN_SCALE = 0.05;
+      const MAX_SCALE = 200;
+
+      const START_X = 1000;
+      const START_Y = 1000;
+
+      img.onload = () => {
+        img.style.left = START_X + "px";
+        img.style.top = START_Y + "px";
+        applyTransform();
+        viewport.scrollLeft = START_X - 50;
+        viewport.scrollTop = START_Y - 50;
+      };
+
+      function applyTransform() {
+        img.style.transform = `scale(${scale})`;
+      }
+
+      function clamp(v, min, max) {
+        return Math.min(Math.max(v, min), max);
+      }
 
       viewport.addEventListener("wheel", (e) => {
         e.preventDefault();
 
-        const delta = e.deltaY < 0 ? 1.1 : 0.9;
-        scale *= delta;
-        scale = Math.min(Math.max(scale, MIN_SCALE), MAX_SCALE);
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
 
-        img.style.transform = `scale(${scale})`;
+        const scrollLeft = viewport.scrollLeft;
+        const scrollTop = viewport.scrollTop;
+
+        const stageX = scrollLeft + mouseX;
+        const stageY = scrollTop + mouseY;
+
+        const imgLeft = parseFloat(img.style.left || "0");
+        const imgTop = parseFloat(img.style.top || "0");
+
+        const relX = (stageX - imgLeft) / scale;
+        const relY = (stageY - imgTop) / scale;
+
+        const zoomIn = e.deltaY < 0;
+        const factor = zoomIn ? 1.12 : 1 / 1.12;
+
+        const newScale = clamp(scale * factor, MIN_SCALE, MAX_SCALE);
+        if (newScale === scale) return;
+
+        scale = newScale;
+        applyTransform();
+
+        const newStageX = imgLeft + relX * scale;
+        const newStageY = imgTop + relY * scale;
+
+        viewport.scrollLeft = newStageX - mouseX;
+        viewport.scrollTop = newStageY - mouseY;
       }, { passive: false });
     </script>
   </body>
