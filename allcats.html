@@ -20,6 +20,7 @@
         overflow: auto;
         background: #000;
         overscroll-behavior: none;
+        cursor: default;
       }
 
       #stage {
@@ -37,14 +38,80 @@
         -ms-interpolation-mode: nearest-neighbor;
         user-select: none;
         -webkit-user-drag: none;
-        cursor: default;
+      }
+
+      #hit {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform-origin: 0 0;
+        background: transparent;
+      }
+
+      #hoverBox {
+        position: absolute;
+        pointer-events: none;
+        border: 2px solid hotpink;
+        box-sizing: border-box;
+        display: none;
+      }
+
+      #hud {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 10px 12px;
+        background: rgba(0, 0, 0, 0.75);
+        color: #d3d3d3;
+        font-family: 'Open Sans', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 14px;
+        z-index: 10;
+        pointer-events: none;
+        box-sizing: border-box;
+      }
+
+      #hud span {
+        color: hotpink;
+        font-weight: 700;
+      }
+
+      #preview {
+        position: fixed;
+        z-index: 11;
+        width: 168px;
+        height: 176px;
+        border: 2px solid hotpink;
+        box-sizing: border-box;
+        background-color: #000;
+        display: none;
+        pointer-events: none;
+        image-rendering: pixelated;
+      }
+
+      #previewInner {
+        width: 100%;
+        height: 100%;
+        background-image: url("img/allcats.png");
+        background-repeat: no-repeat;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        -ms-interpolation-mode: nearest-neighbor;
       }
     </style>
   </head>
   <body>
+    <div id="hud">Cat: <span id="catId">-</span></div>
+
+    <div id="preview">
+      <div id="previewInner"></div>
+    </div>
+
     <div id="viewport">
       <div id="stage">
         <img id="img" src="img/allcats.png" alt="ALLCATS" />
+        <div id="hit"></div>
+        <div id="hoverBox"></div>
       </div>
     </div>
 
@@ -52,14 +119,30 @@
       const viewport = document.getElementById("viewport");
       const stage = document.getElementById("stage");
       const img = document.getElementById("img");
+      const hit = document.getElementById("hit");
+      const hoverBox = document.getElementById("hoverBox");
+      const catIdEl = document.getElementById("catId");
+      const preview = document.getElementById("preview");
+      const previewInner = document.getElementById("previewInner");
 
       let scale = 1;
+
       const MIN_SCALE = 0.25;
       const MAX_SCALE = 200;
       const PAD = 200;
 
+      const COLS = 160;
+      const ROWS = 159;
+
+      const TILE_W = 21;
+      const TILE_H = 22;
+
+      const MAX_ID = COLS * ROWS - 1;
+
       let imgW = 0;
       let imgH = 0;
+
+      let lastHoverId = null;
 
       function clamp(v, min, max) {
         return Math.min(Math.max(v, min), max);
@@ -67,11 +150,15 @@
 
       function applyTransform() {
         img.style.transform = `scale(${scale})`;
+        hit.style.transform = `scale(${scale})`;
       }
 
       function updateStageSizeAndPosition() {
         img.style.left = PAD + "px";
         img.style.top = PAD + "px";
+
+        hit.style.left = PAD + "px";
+        hit.style.top = PAD + "px";
 
         const contentW = Math.ceil(imgW * scale + PAD * 2);
         const contentH = Math.ceil(imgH * scale + PAD * 2);
@@ -103,8 +190,10 @@
         if (newScale === scale) return;
 
         scale = newScale;
+
         applyTransform();
         updateStageSizeAndPosition();
+        updateHoverBoxFromId(lastHoverId);
 
         const newStageX = imgLeft + relX * scale;
         const newStageY = imgTop + relY * scale;
@@ -113,24 +202,162 @@
         viewport.scrollTop = newStageY - mouseY;
       }
 
+      function stageCoordsFromClient(clientX, clientY) {
+        const rect = viewport.getBoundingClientRect();
+        const x = viewport.scrollLeft + (clientX - rect.left);
+        const y = viewport.scrollTop + (clientY - rect.top);
+        return { x, y, rect };
+      }
+
+      function imageCoordsFromStage(stageX, stageY) {
+        const imgLeft = PAD;
+        const imgTop = PAD;
+        const x = (stageX - imgLeft) / scale;
+        const y = (stageY - imgTop) / scale;
+        return { x, y };
+      }
+
+      function idFromImageCoords(ix, iy) {
+        if (ix < 0 || iy < 0 || ix >= imgW || iy >= imgH) return null;
+        const col = Math.floor(ix / TILE_W);
+        const row = Math.floor(iy / TILE_H);
+        if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null;
+        return row * COLS + col;
+      }
+
+      function updateHoverBoxFromId(id) {
+        if (id === null || id === undefined) {
+          hoverBox.style.display = "none";
+          return;
+        }
+        const row = Math.floor(id / COLS);
+        const col = id % COLS;
+
+        const left = PAD + (col * TILE_W) * scale;
+        const top = PAD + (row * TILE_H) * scale;
+        const w = TILE_W * scale;
+        const h = TILE_H * scale;
+
+        hoverBox.style.left = left + "px";
+        hoverBox.style.top = top + "px";
+        hoverBox.style.width = w + "px";
+        hoverBox.style.height = h + "px";
+        hoverBox.style.display = "block";
+      }
+
+      function updatePreview(id, clientX, clientY) {
+        if (id === null || id === undefined) {
+          preview.style.display = "none";
+          return;
+        }
+
+        const row = Math.floor(id / COLS);
+        const col = id % COLS;
+
+        const magnify = 8;
+        const bgW = imgW * magnify;
+        const bgH = imgH * magnify;
+
+        const bgX = -(col * TILE_W * magnify);
+        const bgY = -(row * TILE_H * magnify);
+
+        previewInner.style.backgroundSize = `${bgW}px ${bgH}px`;
+        previewInner.style.backgroundPosition = `${bgX}px ${bgY}px`;
+
+        const pad = 14;
+        let px = clientX + pad;
+        let py = clientY + pad;
+
+        const pr = preview.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        if (px + pr.width > vw - 10) px = clientX - pr.width - pad;
+        if (py + pr.height > vh - 10) py = clientY - pr.height - pad;
+        if (py < 44) py = 44;
+
+        preview.style.left = px + "px";
+        preview.style.top = py + "px";
+        preview.style.display = "block";
+      }
+
+      function setHud(id) {
+        if (id === null || id === undefined) {
+          catIdEl.textContent = "-";
+          return;
+        }
+        catIdEl.textContent = String(id);
+      }
+
+      function openCat(id) {
+        if (id === null || id === undefined) return;
+        const url = `https://mooncatrescue.com/mooncats/${id}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+
       img.onload = () => {
         imgW = img.naturalWidth;
         imgH = img.naturalHeight;
+
+        hit.style.width = imgW + "px";
+        hit.style.height = imgH + "px";
+
         scale = clamp(scale, MIN_SCALE, MAX_SCALE);
+
         applyTransform();
         updateStageSizeAndPosition();
         centerInitialView();
       };
 
-      window.addEventListener("resize", updateStageSizeAndPosition);
+      window.addEventListener("resize", () => {
+        updateStageSizeAndPosition();
+        updateHoverBoxFromId(lastHoverId);
+      });
 
       viewport.addEventListener("wheel", (e) => {
         const wantsZoom = e.ctrlKey || e.metaKey;
         if (!wantsZoom) return;
+
         e.preventDefault();
+
         const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
         zoomAt(e.clientX, e.clientY, factor);
       }, { passive: false });
+
+      hit.addEventListener("mousemove", (e) => {
+        const { x: stageX, y: stageY } = stageCoordsFromClient(e.clientX, e.clientY);
+        const { x: ix, y: iy } = imageCoordsFromStage(stageX, stageY);
+
+        const id = idFromImageCoords(ix, iy);
+        lastHoverId = id;
+
+        setHud(id);
+
+        if (id === null) {
+          hoverBox.style.display = "none";
+          preview.style.display = "none";
+          return;
+        }
+
+        updateHoverBoxFromId(id);
+        updatePreview(id, e.clientX, e.clientY);
+      });
+
+      hit.addEventListener("mouseleave", () => {
+        lastHoverId = null;
+        setHud(null);
+        hoverBox.style.display = "none";
+        preview.style.display = "none";
+      });
+
+      hit.addEventListener("click", (e) => {
+        const { x: stageX, y: stageY } = stageCoordsFromClient(e.clientX, e.clientY);
+        const { x: ix, y: iy } = imageCoordsFromStage(stageX, stageY);
+        const id = idFromImageCoords(ix, iy);
+        if (id === null) return;
+        if (id < 0 || id > MAX_ID) return;
+        openCat(id);
+      });
     </script>
   </body>
 </html>
